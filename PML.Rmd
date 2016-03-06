@@ -1,0 +1,117 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "chihkaiyeh"
+date: "2016/3/6"
+output: html_document
+---
+#Practical Machine Learning Course Project
+Mar. 6, 2016
+Chih-Kai Yeh
+
+##Background Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement ¡V a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+In this project, the goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+##Data Preparation
+```{r,echo=FALSE}
+library(caret)
+library(rpart)
+library(randomForest)
+library(rattle)
+library(rpart.plot)
+library(repmis)
+```
+###Data Source
+The training dataset is avaliable to download form:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+The test dataset is available to download from:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+Let's read the datasets from the host directory
+```{r}
+training <- read.csv("pml-training.csv", na.strings = c("NA", ""))
+testing <- read.csv("pml-testing.csv", na.strings = c("NA", ""))
+```
+According to the environment inforamtion, the training dataset has 19622 observations and 160 variables, and the testing data set contains 20 observations and the 160 variables as the training set. The variable "class"" is the one which we are goning to predict in the following procedures. 
+
+##Cleaning Data
+At this stage, let's pick out the missing value, and resort the dataset.
+```{r}
+training <- training[, colSums(is.na(training)) == 0]
+testing <- testing[, colSums(is.na(testing)) == 0]
+```
+Since the first 7 variales are not really haighly affect the outcome, we can remove it from the dataset to simpfy the training and testing datasets.
+
+```{r}
+traindataset <- training[, -c(1:7)]
+testdataset <- testing[, -c(1:7)]
+```
+Now, According to the environment inforamtion, the cleared training dataset has 19622 observations and 53 variables, and the cleared testing data set contains 20 observations and the 53 variables as the training set.Which is much simpler than original datasets.
+
+##Split Datasets
+Since I would like to estimate the out-of-sample error, I randomly split the training data into a training set (ptrain 70%) and a validation set (vtrain 30%) to measure the errors.
+
+```{r}
+set.seed(7826) 
+inTrain <- createDataPartition(traindataset$classe, p = 0.7, list = FALSE)
+ptrain <- traindataset[inTrain, ]
+vtrain <- traindataset[-inTrain, ]
+```
+
+##Building ML algorithms
+We can apply classification trees and random forests to predict the outcomes.
+
+###Classification Trees
+Let's try 5-fold cross validation when running the algorithm to shorten the processing. Due to data transformations might not be very important in non-linear models like classification trees, we do not need to transform any variable.
+```{r}
+control<- trainControl(method = "cv", number = 5)
+fit_rpart<- train(classe ~ ., data = ptrain, method = "rpart", 
+                   trControl = control)
+print(fit_rpart, digits = 3)
+```
+```{r}
+fancyRpartPlot(fit_rpart$finalModel)
+```
+
+```{r}
+predict_rpart <- predict(fit_rpart, vtrain)
+conf_rpart <- confusionMatrix(vtrain$classe, predict_rpart)
+conf_rpart
+```
+Let's check out the accuracy
+```{r}
+accuracy_rpart <- conf_rpart$overall[1]
+accuracy_rpart
+```
+Only 0.5 of accuracy, which is not good enough for the prediction. Let's try another way to make the prediction.
+
+###Random Forests
+Let's also use 5-fold cross-validation to select optimal tuning parameters for the model.
+```{r}
+fit_rf <- train(classe ~ ., data = ptrain, method = "rf", trControl = control)
+print(fit_rf, digits = 3)
+```
+```{r}
+predict_rf <- predict(fit_rf, vtrain)
+conf_rf <- confusionMatrix(vtrain$classe, predict_rf)
+conf_rf
+```
+Let's check out the accuracy
+```{r}
+accuracy_rf <- conf_rf$overall[1]
+accuracy_rf
+```
+We get a very high accuracy of 0.991, we cna unerstand that for this dataset, using random forest method is the better selection to predict the outcome. 
+
+##Testing Set Prediction
+Since random forest is the more effective method for these datasets, we adapt the same method for testing set to predict the outcomes.
+```{r}
+test_rf <- predict(fit_rf, testdataset)
+test_rf
+```
+
+
+
+
